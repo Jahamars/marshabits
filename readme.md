@@ -37,7 +37,7 @@ After installation, you can run the application using the `marshabits` command i
 ```bash
 marshabits
 ```
-![marshabits](https://photos.app.goo.gl/nVbDGpuGXLBXwh2d6)
+![marshabits](https://github.com/Jahamars/marshabits/blob/main/marshabits.png?raw=true)
 
 ## Shortcuts
 Here is a list of all the shortcuts for the program:
