@@ -23,7 +23,9 @@ pip install urwid
 
 ```bash
 chmod +x marshabits.sh
-./marshabits.sh
+```
+```bash
+sudo ./marshabits.sh
 ```
 
 ## Usage
