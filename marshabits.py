@@ -48,6 +48,14 @@ def add_or_edit_habit(habits, habit_name=None):
     def save_new_habit(button):
         new_habit_name = edit_name.get_edit_text()
         description = edit_description.get_edit_text()
+
+        # Check if we are editing and the name has changed
+        if habit_name and new_habit_name != habit_name:
+            # Delete the old habit file
+            os.remove(os.path.join(HABITS_DIR, f'{habit_name}.json'))
+            del habits[habit_name]
+
+        # Save the new or edited habit
         habits[new_habit_name] = {'description': description, 'dates': habit_data['dates']}
         save_habit(new_habit_name, habits[new_habit_name], HABITS_DIR)
         update_ui()
@@ -60,7 +68,6 @@ def add_or_edit_habit(habits, habit_name=None):
     fill = urwid.Filler(pile)
     loop.widget = urwid.Padding(fill, left=2, right=2)
 
-# Function to display habits
 def display_habits(habits):
     today = datetime.date.today().strftime('%Y-%m-%d')
     habit_names = sorted(habits.keys())
@@ -71,7 +78,7 @@ def display_habits(habits):
         for date in details['dates']:
             text.append(f"  {date}\n")
         back_button = urwid.Button("Back", lambda button: update_ui())
-        delete_button = urwid.Button("Delete", lambda button: delete_habit(habits, habit_name))
+        delete_button = urwid.Button("Delete", lambda button, name=habit_name: delete_habit(habits, name))
         edit_button = urwid.Button("Edit", lambda button: add_or_edit_habit(habits, habit_name))
         pile = urwid.Pile([urwid.Text(''.join(text)), back_button, edit_button, delete_button])
         fill = urwid.Filler(pile)
@@ -87,28 +94,45 @@ def display_habits(habits):
     fill = urwid.Filler(pile)
     loop.widget = urwid.Padding(fill, left=2, right=2)
 
+    
+    buttons = []
+    for habit_name in habit_names:
+        status = "[X]" if today in habits[habit_name]['dates'] else "[ ]"
+        button = urwid.Button(f"{status} {habit_name}", lambda button, name=habit_name: show_habit_details(button, name))
+        buttons.append(button)
+    back_button = urwid.Button("Back", lambda button: update_ui())
+    pile = urwid.Pile(buttons + [back_button])
+    fill = urwid.Filler(pile)
+    loop.widget = urwid.Padding(fill, left=2, right=2)
+
+
 # Function to plot habits
 def plot_habits(habits):
-    def show_statistics(button, stat_type):
-        habits = load_habits(HABITS_DIR)
-        stats_text = []
-    
-        if stat_type == 'all_time':
-            stats_text.append("Statistics for all time:\n")
-            for habit_name, habit in habits.items():
-                stats_text.append(f"Habit: {habit_name}\n")
-                stats_text.append(f"Description: {habit['description']}\n")
-                stats_text.append("Dates:\n")
-                for date in habit['dates']:
-                    stats_text.append(f"  {date}\n")
-                stats_text.append("\n")
-    
-        stats_display = urwid.Text(''.join(stats_text))
-        back_button = urwid.Button("Back", lambda button: update_ui())
-        pile = urwid.Pile([stats_display, back_button])
+    def show_statistics(button, period):
+        today = datetime.date.today()
+        if period == '10_days':
+            days = [today - datetime.timedelta(days=i) for i in range(10)]
+        elif period == 'month':
+            days = [today - datetime.timedelta(days=i) for i in range(30)]
+        else:
+            start_date = min(
+                (datetime.datetime.strptime(date, '%Y-%m-%d') for habit in habits.values() for date in habit['dates']),
+                default=today
+            ).date()
+            days = [start_date + datetime.timedelta(days=i) for i in range((today - start_date).days + 1)]
+        
+        text = ["Habit Progress:\n"]
+        for day in days[::-1]:
+            day_str = day.strftime('%Y-%m-%d')
+            completed = sum(1 for habit in habits.values() if day_str in habit['dates'])
+            percentage = (completed / len(habits)) * 100 if habits else 0
+            text.append(f"{day_str}: {'#' * int(percentage // 10)}{' ' * (10 - int(percentage // 10))} ({percentage:.0f}%)\n")
+        
+        back_button = urwid.Button("Back", lambda button: plot_habits(habits))
+        pile = urwid.Pile([urwid.Text(''.join(text)), back_button])
         fill = urwid.Filler(pile)
         loop.widget = urwid.Padding(fill, left=2, right=2)
-    
+
     buttons = [
         urwid.Button("Last 10 days", lambda button: show_statistics(button, '10_days')),
         urwid.Button("Last month", lambda button: show_statistics(button, 'month')),
@@ -119,20 +143,29 @@ def plot_habits(habits):
     fill = urwid.Filler(pile)
     loop.widget = urwid.Padding(fill, left=2, right=2)
 
-# Function to mark habits as done
-def mark_habits_menu(habits):
-    today = datetime.date.today().strftime('%Y-%m-%d')
+# Function to mark yesterday's habits as done
+def mark_yesterdays_habits_menu(habits):
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
     habit_buttons = []
     for habit_name, details in sorted(habits.items()):
-        status = "[X]" if today in details['dates'] else "[ ]"
+        status = "[X]" if yesterday in details['dates'] else "[ ]"
         habit_button = urwid.Button(f"{status} {habit_name}\nDescription: {details['description']}",
-                                    lambda button, name=habit_name: mark_habit_done(habits, name))
+                                    lambda button, name=habit_name: mark_habit_yesterday_done(habits, name))
         habit_buttons.append(habit_button)
     
     back_button = urwid.Button("Back", lambda button: update_ui())
     pile = urwid.Pile(habit_buttons + [back_button])
     fill = urwid.Filler(pile)
     loop.widget = urwid.Padding(fill, left=2, right=2)
+
+def mark_habit_yesterday_done(habits, habit_name):
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+    if yesterday in habits[habit_name]['dates']:
+        habits[habit_name]['dates'].remove(yesterday)
+    else:
+        habits[habit_name]['dates'].append(yesterday)
+    save_habit(habit_name, habits[habit_name], HABITS_DIR)
+    update_ui()
 
 # Main menu function
 def main_menu():
@@ -148,7 +181,7 @@ def main_menu():
         urwid.Button("1. Add a new habit", lambda button: add_or_edit_habit(habits)),
         urwid.Button("2. Display habits", lambda button: display_habits(habits)),
         urwid.Button("3. Plot habits", lambda button: plot_habits(habits)),
-        urwid.Button("4. Mark habits as done", lambda button: mark_habits_menu(habits)),
+        urwid.Button("4. Mark yesterday's habits as done", lambda button: mark_yesterdays_habits_menu(habits)),
         urwid.Button("5. Delete a habit", lambda button: delete_habit_menu(habits)),
         urwid.Button("6. Manage Trash Bin", lambda button: manage_trash_bin()),
         urwid.Button("7. Quit", lambda button: exit_program())
@@ -158,13 +191,23 @@ def main_menu():
     fill = urwid.Filler(pile)
     return urwid.Padding(fill, left=2, right=2)
 
-# Function to display the list of today's habits
+# Function to display the list of today's habits and mark them as done
 def habit_list(habits):
     today = datetime.date.today().strftime('%Y-%m-%d')
+
+    def mark_habit_done(button, habit_name):
+        if today in habits[habit_name]['dates']:
+            habits[habit_name]['dates'].remove(today)
+        else:
+            habits[habit_name]['dates'].append(today)
+        save_habit(habit_name, habits[habit_name], HABITS_DIR)
+        update_ui()
+
     buttons = []
     for habit_name, details in sorted(habits.items()):
         status = "[X]" if today in details['dates'] else "[ ]"
-        button = urwid.Text(f"{status} {habit_name}")
+        button = urwid.Button(f"{status} {habit_name}",
+                              lambda button, name=habit_name: mark_habit_done(button, name))
         buttons.append(button)
     return urwid.Pile(buttons)
 
@@ -199,7 +242,7 @@ def handle_shortcuts(key):
     elif key in ('3', 'p'):
         plot_habits(load_habits(HABITS_DIR))
     elif key in ('4', 'm'):
-        mark_habits_menu(load_habits(HABITS_DIR))
+        mark_yesterdays_habits_menu(load_habits(HABITS_DIR))
     elif key in ('5', 'x'):
         delete_habit_menu(load_habits(HABITS_DIR))
     elif key in ('6', 't'):
@@ -233,15 +276,6 @@ def confirm_delete_habit(habits, habit_name):
     pile = urwid.Pile([text, button_yes, button_no])
     fill = urwid.Filler(pile)
     loop.widget = urwid.Padding(fill, left=2, right=2)
-
-def mark_habit_done(habits, habit_name):
-    today = datetime.date.today().strftime('%Y-%m-%d')
-    if today in habits[habit_name]['dates']:
-        habits[habit_name]['dates'].remove(today)
-    else:
-        habits[habit_name]['dates'].append(today)
-    save_habit(habit_name, habits[habit_name], HABITS_DIR)
-    update_ui()
 
 # Function to manage trash bin
 def manage_trash_bin():
@@ -285,8 +319,6 @@ def exit_program():
 
 # Load habits and start the main loop
 loop = urwid.MainLoop(urwid.SolidFill(), unhandled_input=handle_shortcuts)
-try:
-    update_ui()
-    loop.run()
-except KeyboardInterrupt:
-    print("Программа завершена пользователем.")
+update_ui()
+loop.run()
+
