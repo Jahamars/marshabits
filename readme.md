@@ -30,6 +30,16 @@ chmod +x marshabits.sh
 sudo ./marshabits.sh
 ```
 
+# Or for docker lovers  [DockerHub](https://hub.docker.com/r/jahamars/habit-tracker)
+
+```bash
+docker pull jahamars/habit-tracker:latest
+```
+
+```bash
+docker run -it --rm jahamars/habit-tracker:latest
+```
+
 ## Usage
 
 After installation, you can run the application using the `marshabits` command in the terminal:
